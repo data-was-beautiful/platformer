@@ -114,3 +114,42 @@ platformer/
 - **Animations**: extend the spritesheet width with more frames, track `anim_frame` in the entity struct, advance it on a timer
 - **Camera**: add a `Camera {float x,y;}` to `Game`, subtract it from all render positions, lerp it toward the player each frame
 - **Tile variety**: add tile types (e.g. `TILE_SPIKE = 2`) in `level.h`, handle them in `level_collides` and `level_render`
+
+## Audio
+
+Sound effects and music are loaded from `assets/` via SDL2_mixer.
+**They are optional** — the game runs silently without them.
+
+| File | Event |
+|------|-------|
+| `assets/music.ogg` | Looping background music |
+| `assets/jump.wav`  | Player jumps |
+| `assets/stomp.wav` | Enemy stomped |
+| `assets/death.wav` | Player killed |
+
+WAV files can also be OGG — just name them accordingly and update `SFX_PATHS` in `audio.c`.
+
+### Installing SDL2_mixer
+
+```bash
+# Linux
+sudo apt install libsdl2-mixer-dev
+
+# macOS
+brew install sdl2_mixer
+```
+
+Then `make clean && make`. The Makefile detects the library automatically.
+
+### Free sound effect sources
+- **[freesound.org](https://freesound.org)** — CC0 and CC-BY sound effects
+- **[OpenGameArt.org](https://opengameart.org)** — game-ready SFX and music
+- **[itch.io free audio](https://itch.io/game-assets/free/tag-sound-effects)** — curated packs
+- **[Kenney.nl](https://kenney.nl/assets?q=audio)** — CC0 SFX packs
+
+### Adjusting volume
+In `game_init` in `game.c`:
+```c
+audio_set_music_volume(80);       /* 0–128 */
+audio_set_sfx_volume(&g->audio, 110);
+```

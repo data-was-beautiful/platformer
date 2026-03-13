@@ -6,6 +6,7 @@
 #include "player.h"
 #include "enemy.h"
 #include "sprites.h"
+#include "audio.h"
 
 #define WINDOW_W   1280
 #define WINDOW_H    640
@@ -23,6 +24,7 @@ typedef struct {
     int     enemy_count;
 
     Sprites sprites;
+    Audio   audio;
 
     bool   running;
     int    deaths;

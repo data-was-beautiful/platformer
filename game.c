@@ -1,6 +1,11 @@
 #include "game.h"
 #include "physics.h"
 #include <stdio.h>
+#if defined(_WIN32)
+#include <direct.h>
+#else
+#include <unistd.h>
+#endif
 
 /* -------------------------------------------------------------------------
    Helpers
@@ -18,7 +23,7 @@ static void spawn_enemies(Game *g) {
    Public API
    ------------------------------------------------------------------------- */
 int game_init(Game *g) {
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return -1;
     }
@@ -52,11 +57,44 @@ int game_init(Game *g) {
     /* Load sprites (graceful: NULL textures if files are absent) */
     sprites_load(&g->sprites, g->renderer);
 
+    /* Load audio (graceful: no-ops if SDL2_mixer absent or files missing) */
+    audio_load(&g->audio);
+    audio_set_music_volume(80);   /* 0–128; tweak to taste */
+    audio_set_sfx_volume(&g->audio, 110);
+
+    /* Startup diagnostics — printed to terminal on launch */
+    {
+        char cwd[512];
+        if (SDL_GetBasePath()) {
+            fprintf(stderr, "INFO: SDL base path : %s\n", SDL_GetBasePath());
+        }
+#if defined(_WIN32)
+        if (_getcwd(cwd, sizeof(cwd)))
+#else
+        if (getcwd(cwd, sizeof(cwd)))
+#endif
+            fprintf(stderr, "INFO: working dir   : %s\n", cwd);
+
+#ifdef SDL2_IMAGE_FOUND
+        fprintf(stderr, "INFO: SDL2_image     : compiled IN\n");
+#else
+        fprintf(stderr, "INFO: SDL2_image     : NOT compiled in (rect fallback)\n");
+#endif
+        fprintf(stderr, "INFO: sprites.player : %s\n",
+                g->sprites.player ? "LOADED" : "NULL (missing/failed)");
+        fprintf(stderr, "INFO: sprites.enemy  : %s\n",
+                g->sprites.enemy  ? "LOADED" : "NULL (missing/failed)");
+        fprintf(stderr, "INFO: sprites.tile   : %s\n",
+                g->sprites.tile   ? "LOADED" : "NULL (missing/failed)");
+    }
+
     /* Spawn player and enemies from level data */
     player_init(&g->player,
                 g->level.player_spawn.x,
                 g->level.player_spawn.y);
     spawn_enemies(g);
+
+    audio_play_music(&g->audio);
 
     g->running = true;
     g->deaths  = 0;
@@ -80,7 +118,18 @@ void game_handle_events(Game *g) {
     }
 
     const uint8_t *keys = SDL_GetKeyboardState(NULL);
+
+    /* Detect jump press this frame so we can fire the SFX exactly once */
+    bool jump_pressed = (keys[SDL_SCANCODE_SPACE] ||
+                         keys[SDL_SCANCODE_W]     ||
+                         keys[SDL_SCANCODE_UP]) != 0;
+    bool was_on_ground = g->player.on_ground;
+
     player_handle_input(&g->player, keys);
+
+    /* Play jump SFX on the frame the player leaves the ground */
+    if (jump_pressed && was_on_ground)
+        audio_play_sfx(&g->audio, SFX_JUMP);
 }
 
 void game_update(Game *g, float dt) {
@@ -102,8 +151,10 @@ void game_update(Game *g, float dt) {
             if (g->player.vy > 0 && player_bottom - enemy_top < 16) {
                 g->enemies[i].alive = false;
                 g->player.vy = PLAYER_JUMP * 0.6f;
+                audio_play_sfx(&g->audio, SFX_STOMP);
             } else {
                 g->deaths++;
+                audio_play_sfx(&g->audio, SFX_DEATH);
                 player_init(&g->player,
                             g->level.player_spawn.x,
                             g->level.player_spawn.y);
@@ -144,6 +195,7 @@ void game_render(Game *g) {
 }
 
 void game_shutdown(Game *g) {
+    audio_free(&g->audio);
     sprites_free(&g->sprites);
     if (g->renderer) SDL_DestroyRenderer(g->renderer);
     if (g->window)   SDL_DestroyWindow(g->window);
