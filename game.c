@@ -252,10 +252,12 @@ void game_update(Game *g, float dt) {
         }
     }
 
-    /* --- Loot boxes --- */
-    int spawned = lootbox_manager_update(&g->lootboxes, &g->level, dt);
-    if (spawned >= 0)
-        audio_play_sfx(&g->audio, SFX_LOOTBOX_SPAWN);
+    /* --- Loot boxes: only spawn while normal enemies are still alive --- */
+    if (!all_enemies_dead(g)) {
+        int spawned = lootbox_manager_update(&g->lootboxes, &g->level, dt);
+        if (spawned >= 0)
+            audio_play_sfx(&g->audio, SFX_LOOTBOX_SPAWN);
+    }
 
     int opened = lootbox_check_open(&g->lootboxes, pbox);
     if (opened >= 0) {
@@ -265,7 +267,7 @@ void game_update(Game *g, float dt) {
         audio_play_sfx(&g->audio, SFX_BOSS_SPAWN);
     }
 
-    /* --- Level clear: all enemies dead, no loot boxes active --- */
+    /* --- Level clear: all enemies dead and no already-active loot boxes --- */
     bool any_lootbox_active = false;
     for (int i = 0; i < MAX_LOOTBOXES; i++)
         if (g->lootboxes.boxes[i].active) { any_lootbox_active = true; break; }
