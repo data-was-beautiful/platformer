@@ -27,20 +27,26 @@ void sprites_load(Sprites *s, SDL_Renderer *renderer) {
                 IMG_GetError());
         return;
     }
-    s->player = load_texture(renderer, "assets/player.png");
-    s->enemy  = load_texture(renderer, "assets/enemy.png");
-    s->tile   = load_texture(renderer, "assets/tile.png");
+    s->player  = load_texture(renderer, "assets/player.png");
+    s->enemy   = load_texture(renderer, "assets/enemy.png");
+    s->tile    = load_texture(renderer, "assets/tile.png");
+    s->spring  = load_texture(renderer, "assets/spring.png");
+    s->lootbox = load_texture(renderer, "assets/lootbox.png");
+    s->boss    = load_texture(renderer, "assets/boss.png");
 }
 
 void sprites_free(Sprites *s) {
-    if (s->player) SDL_DestroyTexture(s->player);
-    if (s->enemy)  SDL_DestroyTexture(s->enemy);
-    if (s->tile)   SDL_DestroyTexture(s->tile);
+    if (s->player)  SDL_DestroyTexture(s->player);
+    if (s->enemy)   SDL_DestroyTexture(s->enemy);
+    if (s->tile)    SDL_DestroyTexture(s->tile);
+    if (s->spring)  SDL_DestroyTexture(s->spring);
+    if (s->lootbox) SDL_DestroyTexture(s->lootbox);
+    if (s->boss)    SDL_DestroyTexture(s->boss);
     IMG_Quit();
     memset(s, 0, sizeof(*s));
 }
 
-#else  /* SDL2_image not available — stub everything out */
+#else
 
 void sprites_load(Sprites *s, SDL_Renderer *renderer) {
     (void)renderer;
@@ -52,4 +58,4 @@ void sprites_free(Sprites *s) {
     memset(s, 0, sizeof(*s));
 }
 
-#endif /* SDL2_IMAGE_FOUND */
+#endif

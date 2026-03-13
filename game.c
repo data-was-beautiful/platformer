@@ -2,6 +2,7 @@
 #include "physics.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #if defined(_WIN32)
 #include <direct.h>
 #else
@@ -26,6 +27,29 @@ static int all_enemies_dead(Game *g) {
     return 1;
 }
 
+/* Find a free enemy slot, or -1 if none available */
+static int find_free_enemy_slot(Game *g) {
+    for (int i = 0; i < MAX_ENEMIES; i++)
+        if (!g->enemies[i].alive) return i;
+    /* Also use beyond current count if room */
+    if (g->enemy_count < MAX_ENEMIES) return g->enemy_count;
+    return -1;
+}
+
+/* Spawn a boss at a random x position near the top of the level */
+static void spawn_boss(Game *g) {
+    int slot = find_free_enemy_slot(g);
+    if (slot < 0) return;
+
+    /* Pick a random column away from the edges */
+    int col = 2 + rand() % (g->level.cols - 4);
+    float x = (float)(col * TILE_SIZE);
+    float y = TILE_SIZE * 2.0f;   /* drop in from near the top */
+
+    enemy_init_boss(&g->enemies[slot], x, y);
+    if (slot >= g->enemy_count) g->enemy_count = slot + 1;
+}
+
 /* -------------------------------------------------------------------------
    Level loading
    ------------------------------------------------------------------------- */
@@ -33,8 +57,7 @@ void game_load_level(Game *g, int level_num) {
     char path[64];
     snprintf(path, sizeof(path), "assets/level%d.txt", level_num);
     if (!level_load(&g->level, path)) {
-        fprintf(stderr, "game_load_level: '%s' not found, using built-in\n",
-                path);
+        fprintf(stderr, "game_load_level: '%s' not found, using built-in\n", path);
         level_init_builtin(&g->level);
     }
     g->current_level = level_num;
@@ -42,6 +65,7 @@ void game_load_level(Game *g, int level_num) {
                 g->level.player_spawn.x,
                 g->level.player_spawn.y);
     spawn_enemies(g);
+    lootbox_manager_init(&g->lootboxes);
 }
 
 /* -------------------------------------------------------------------------
@@ -50,10 +74,8 @@ void game_load_level(Game *g, int level_num) {
 void game_goto_title(Game *g) {
     g->state = STATE_TITLE;
     title_init(&g->title, g->music_on);
-    if (!g->music_on)
-        audio_stop_music();
-    else
-        audio_play_music(&g->audio);
+    if (!g->music_on) audio_stop_music();
+    else              audio_play_music(&g->audio);
 }
 
 void game_start_playing(Game *g) {
@@ -62,10 +84,8 @@ void game_start_playing(Game *g) {
     g->lives         = STARTING_LIVES;
     g->current_level = 1;
     game_load_level(g, 1);
-    if (g->music_on)
-        audio_play_music(&g->audio);
-    else
-        audio_stop_music();
+    if (g->music_on) audio_play_music(&g->audio);
+    else             audio_stop_music();
 }
 
 /* -------------------------------------------------------------------------
@@ -82,9 +102,7 @@ int game_init(Game *g) {
     g->window = SDL_CreateWindow(
         "Platformer",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        WINDOW_W, WINDOW_H,
-        SDL_WINDOW_SHOWN
-    );
+        WINDOW_W, WINDOW_H, SDL_WINDOW_SHOWN);
     if (!g->window) {
         fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
         return -1;
@@ -92,8 +110,7 @@ int game_init(Game *g) {
 
     g->renderer = SDL_CreateRenderer(
         g->window, -1,
-        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
-    );
+        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!g->renderer) {
         fprintf(stderr, "SDL_CreateRenderer: %s\n", SDL_GetError());
         return -1;
@@ -104,7 +121,7 @@ int game_init(Game *g) {
     audio_set_music_volume(80);
     audio_set_sfx_volume(&g->audio, 110);
 
-    /* Diagnostics */
+    /* Startup diagnostics */
     {
         char cwd[512];
 #if defined(_WIN32)
@@ -112,27 +129,30 @@ int game_init(Game *g) {
 #else
         if (getcwd(cwd, sizeof(cwd)))
 #endif
-            fprintf(stderr, "INFO: working dir  : %s\n", cwd);
+            fprintf(stderr, "INFO: working dir : %s\n", cwd);
 #ifdef SDL2_IMAGE_FOUND
-        fprintf(stderr, "INFO: SDL2_image   : compiled IN\n");
+        fprintf(stderr, "INFO: SDL2_image  : compiled IN\n");
 #else
-        fprintf(stderr, "INFO: SDL2_image   : NOT compiled in\n");
+        fprintf(stderr, "INFO: SDL2_image  : NOT compiled in\n");
 #endif
 #ifdef SDL2_MIXER_FOUND
-        fprintf(stderr, "INFO: SDL2_mixer   : compiled IN\n");
+        fprintf(stderr, "INFO: SDL2_mixer  : compiled IN\n");
 #else
-        fprintf(stderr, "INFO: SDL2_mixer   : NOT compiled in\n");
+        fprintf(stderr, "INFO: SDL2_mixer  : NOT compiled in\n");
 #endif
-        fprintf(stderr, "INFO: sprites      : player=%s enemy=%s tile=%s\n",
-                g->sprites.player ? "OK" : "missing",
-                g->sprites.enemy  ? "OK" : "missing",
-                g->sprites.tile   ? "OK" : "missing");
+        fprintf(stderr,
+            "INFO: sprites     : player=%s enemy=%s tile=%s "
+            "spring=%s lootbox=%s boss=%s\n",
+            g->sprites.player  ? "OK" : "missing",
+            g->sprites.enemy   ? "OK" : "missing",
+            g->sprites.tile    ? "OK" : "missing",
+            g->sprites.spring  ? "OK" : "missing",
+            g->sprites.lootbox ? "OK" : "missing",
+            g->sprites.boss    ? "OK" : "missing");
     }
 
-    /* Start on the title screen */
     g->music_on = true;
     game_goto_title(g);
-
     return 0;
 }
 
@@ -142,29 +162,19 @@ int game_init(Game *g) {
 void game_handle_events(Game *g) {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
-
-        if (e.type == SDL_QUIT) {
-            g->state = STATE_QUIT;
-            return;
-        }
+        if (e.type == SDL_QUIT) { g->state = STATE_QUIT; return; }
 
         if (g->state == STATE_TITLE) {
             bool start_game, quit, music_toggled;
             title_handle_event(&g->title, &e,
                                &start_game, &quit, &music_toggled);
-            if (quit) {
-                g->state = STATE_QUIT;
-                return;
-            }
+            if (quit)          { g->state = STATE_QUIT; return; }
             if (music_toggled) {
                 g->music_on = g->title.music_on;
-                if (g->music_on)
-                    audio_play_music(&g->audio);
-                else
-                    audio_stop_music();
+                if (g->music_on) audio_play_music(&g->audio);
+                else             audio_stop_music();
             }
-            if (start_game)
-                game_start_playing(g);
+            if (start_game) game_start_playing(g);
             continue;
         }
 
@@ -177,17 +187,13 @@ void game_handle_events(Game *g) {
         }
     }
 
-    /* Per-frame key state for player input (only in PLAYING) */
     if (g->state == STATE_PLAYING) {
         const uint8_t *keys = SDL_GetKeyboardState(NULL);
-
-        bool jump_pressed = (keys[SDL_SCANCODE_SPACE] ||
-                             keys[SDL_SCANCODE_W]     ||
-                             keys[SDL_SCANCODE_UP]) != 0;
+        bool jump_pressed  = (keys[SDL_SCANCODE_SPACE] ||
+                              keys[SDL_SCANCODE_W]     ||
+                              keys[SDL_SCANCODE_UP]) != 0;
         bool was_on_ground = g->player.on_ground;
-
         player_handle_input(&g->player, keys);
-
         if (jump_pressed && was_on_ground)
             audio_play_sfx(&g->audio, SFX_JUMP);
     }
@@ -200,12 +206,19 @@ void game_update(Game *g, float dt) {
     if (g->state != STATE_PLAYING) return;
     if (dt > 0.05f) dt = 0.05f;
 
+    /* --- Player physics --- */
+    bool was_on_spring = g->player.on_spring;
     player_update(&g->player, &g->level, dt);
 
+    /* Spring SFX — fire once on the frame the spring launches the player */
+    if (!was_on_spring && g->player.on_spring)
+        audio_play_sfx(&g->audio, SFX_SPRING);
+
+    /* --- Enemy physics --- */
     for (int i = 0; i < g->enemy_count; i++)
         enemy_update(&g->enemies[i], &g->level, dt);
 
-    /* Player–enemy collision */
+    /* --- Player–enemy collision --- */
     AABB pbox = player_aabb(&g->player);
     for (int i = 0; i < g->enemy_count; i++) {
         if (!g->enemies[i].alive) continue;
@@ -214,103 +227,86 @@ void game_update(Game *g, float dt) {
 
         float player_bottom = g->player.y + PLAYER_H;
         float enemy_top     = g->enemies[i].y;
+
         if (g->player.vy > 0 && player_bottom - enemy_top < 16) {
-            /* Stomp */
-            g->enemies[i].alive = false;
+            /* Stomp — deal one HP of damage */
+            g->enemies[i].hp--;
             g->player.vy = PLAYER_JUMP * 0.6f;
-            g->score++;
             audio_play_sfx(&g->audio, SFX_STOMP);
+            if (g->enemies[i].hp <= 0) {
+                g->enemies[i].alive = false;
+                /* Score: boss worth 3, normal worth 1 */
+                g->score += (g->enemies[i].type == ENEMY_BOSS) ? 3 : 1;
+            }
         } else {
-            /* Hit */
+            /* Hit by enemy */
             g->lives--;
             audio_play_sfx(&g->audio, SFX_DEATH);
             if (g->lives <= 0) {
-                /* Game over → title */
                 game_goto_title(g);
                 return;
             }
-            /* Respawn on same level */
             player_init(&g->player,
                         g->level.player_spawn.x,
                         g->level.player_spawn.y);
         }
     }
 
-    /* Level clear — all enemies dead */
-    if (g->enemy_count > 0 && all_enemies_dead(g)) {
+    /* --- Loot boxes --- */
+    int spawned = lootbox_manager_update(&g->lootboxes, &g->level, dt);
+    if (spawned >= 0)
+        audio_play_sfx(&g->audio, SFX_LOOTBOX_SPAWN);
+
+    int opened = lootbox_check_open(&g->lootboxes, pbox);
+    if (opened >= 0) {
+        g->score += 10;
+        audio_play_sfx(&g->audio, SFX_LOOTBOX_OPEN);
+        spawn_boss(g);
+        audio_play_sfx(&g->audio, SFX_BOSS_SPAWN);
+    }
+
+    /* --- Level clear: all enemies dead, no loot boxes active --- */
+    bool any_lootbox_active = false;
+    for (int i = 0; i < MAX_LOOTBOXES; i++)
+        if (g->lootboxes.boxes[i].active) { any_lootbox_active = true; break; }
+
+    if (g->enemy_count > 0 && all_enemies_dead(g) && !any_lootbox_active) {
         int next = g->current_level + 1;
         char path[64];
         snprintf(path, sizeof(path), "assets/level%d.txt", next);
-
-        /* Check if next level file exists */
         FILE *f = fopen(path, "r");
-        if (f) {
-            fclose(f);
-            game_load_level(g, next);
-        } else {
-            /* No more levels — loop back to level 1, keep score */
-            game_load_level(g, 1);
-        }
+        if (f) { fclose(f); game_load_level(g, next); }
+        else   { game_load_level(g, 1); }
     }
 }
 
 /* -------------------------------------------------------------------------
-   HUD rendering (score top-right, lives top-left)
+   HUD
    ------------------------------------------------------------------------- */
-
-/* Minimal inline bitmap font for HUD numbers/letters
-   Uses the same glyph engine as title.c but we call SDL directly here
-   to avoid a cross-module dependency on title.c internals.
-   We expose a small helper via a shared draw call instead.
-   Rather than duplicate the glyph table, we draw the HUD as simple
-   coloured indicator blocks — lives as green squares, score as a
-   right-aligned number built from SDL_RenderFillRect segments.           */
-
-/* Draw a single decimal digit d (0–9) at (x,y) as a 7-segment-style rect */
 static void draw_digit(SDL_Renderer *r, int d, int x, int y,
                         int seg_w, int seg_h, SDL_Color c) {
     SDL_SetRenderDrawColor(r, c.r, c.g, c.b, c.a);
-    /* Encode which of 7 segments are on for each digit:
-       segments: top, top-left, top-right, middle, bot-left, bot-right, bottom */
     static const uint8_t SEG[10] = {
-        0x77, /* 0: all except middle  */
-        0x24, /* 1: top-right, bot-right */
-        0x5D, /* 2 */
-        0x6D, /* 3 */
-        0x2E, /* 4 */
-        0x6B, /* 5 */
-        0x7B, /* 6 */
-        0x25, /* 7 */
-        0x7F, /* 8 */
-        0x6F, /* 9 */
+        0x77,0x24,0x5D,0x6D,0x2E,0x6B,0x7B,0x25,0x7F,0x6F
     };
     uint8_t s = SEG[d];
-    int w = seg_w, h = seg_h, t = 3; /* thickness */
-    /* top */
-    if (s & 0x40) { SDL_Rect rc={x,       y,       w, t}; SDL_RenderFillRect(r,&rc); }
-    /* top-left */
-    if (s & 0x20) { SDL_Rect rc={x,       y,       t, h}; SDL_RenderFillRect(r,&rc); }
-    /* top-right */
-    if (s & 0x10) { SDL_Rect rc={x+w-t,   y,       t, h}; SDL_RenderFillRect(r,&rc); }
-    /* middle */
-    if (s & 0x08) { SDL_Rect rc={x,       y+h-t,   w, t}; SDL_RenderFillRect(r,&rc); }
-    /* bot-left */
-    if (s & 0x04) { SDL_Rect rc={x,       y+h-t,   t, h}; SDL_RenderFillRect(r,&rc); }
-    /* bot-right */
-    if (s & 0x02) { SDL_Rect rc={x+w-t,   y+h-t,   t, h}; SDL_RenderFillRect(r,&rc); }
-    /* bottom */
-    if (s & 0x01) { SDL_Rect rc={x,       y+h*2-t, w, t}; SDL_RenderFillRect(r,&rc); }
+    int w = seg_w, h = seg_h, t = 3;
+    if (s&0x40){SDL_Rect rc={x,     y,     w,t};SDL_RenderFillRect(r,&rc);}
+    if (s&0x20){SDL_Rect rc={x,     y,     t,h};SDL_RenderFillRect(r,&rc);}
+    if (s&0x10){SDL_Rect rc={x+w-t, y,     t,h};SDL_RenderFillRect(r,&rc);}
+    if (s&0x08){SDL_Rect rc={x,     y+h-t, w,t};SDL_RenderFillRect(r,&rc);}
+    if (s&0x04){SDL_Rect rc={x,     y+h-t, t,h};SDL_RenderFillRect(r,&rc);}
+    if (s&0x02){SDL_Rect rc={x+w-t, y+h-t, t,h};SDL_RenderFillRect(r,&rc);}
+    if (s&0x01){SDL_Rect rc={x,     y+h*2-t,w,t};SDL_RenderFillRect(r,&rc);}
 }
 
-static void draw_number_right(SDL_Renderer *r, int value,
-                               int right_x, int y) {
-    /* Draw up to 6 digits right-aligned at right_x */
+static void draw_number_right(SDL_Renderer *r, int value, int right_x, int y) {
     char buf[16];
     snprintf(buf, sizeof(buf), "%d", value);
     int seg_w = 16, seg_h = 14, gap = 4;
     int digit_w = seg_w + gap;
     int len = (int)strlen(buf);
-    SDL_Color col = { 255, 220, 60, 255 };
+    SDL_Color col = {255, 220, 60, 255};
     for (int i = len - 1; i >= 0; i--) {
         int d = buf[i] - '0';
         int x = right_x - (len - i) * digit_w;
@@ -320,32 +316,28 @@ static void draw_number_right(SDL_Renderer *r, int value,
 
 static void draw_hud(Game *g) {
     /* Lives — green squares top-left */
-    SDL_Color live_col  = { 80,  200, 80,  255 };
-    SDL_Color dead_col  = { 50,  50,  50,  180 };
     for (int i = 0; i < STARTING_LIVES; i++) {
-        SDL_Color c = (i < g->lives) ? live_col : dead_col;
+        SDL_Color c = (i < g->lives)
+            ? (SDL_Color){80, 200, 80, 255}
+            : (SDL_Color){50, 50,  50, 180};
         SDL_SetRenderDrawColor(g->renderer, c.r, c.g, c.b, c.a);
-        SDL_Rect sq = { 14 + i * 22, 14, 16, 16 };
+        SDL_Rect sq = {14 + i * 22, 14, 16, 16};
         SDL_RenderFillRect(g->renderer, &sq);
     }
 
-    /* Score label + number — top right */
-    /* "SCORE" label as a coloured bar */
+    /* Score — top right */
     SDL_SetRenderDrawColor(g->renderer, 60, 60, 100, 200);
-    SDL_Rect score_bg = { WINDOW_W - 160, 8, 152, 44 };
+    SDL_Rect score_bg = {WINDOW_W - 160, 8, 152, 44};
     SDL_RenderFillRect(g->renderer, &score_bg);
     SDL_SetRenderDrawColor(g->renderer, 100, 100, 160, 255);
     SDL_RenderDrawRect(g->renderer, &score_bg);
-
     draw_number_right(g->renderer, g->score, WINDOW_W - 16, 14);
 
-    /* Level indicator */
+    /* Level — top centre */
     SDL_SetRenderDrawColor(g->renderer, 60, 60, 100, 160);
-    SDL_Rect lvl_bg = { WINDOW_W / 2 - 50, 8, 100, 28 };
+    SDL_Rect lvl_bg = {WINDOW_W / 2 - 50, 8, 100, 28};
     SDL_RenderFillRect(g->renderer, &lvl_bg);
-    /* Draw level number small, centred */
-    draw_number_right(g->renderer, g->current_level,
-                      WINDOW_W / 2 + 40, 12);
+    draw_number_right(g->renderer, g->current_level, WINDOW_W / 2 + 40, 12);
 }
 
 /* -------------------------------------------------------------------------
@@ -362,20 +354,24 @@ void game_render(Game *g) {
         SDL_SetRenderDrawColor(g->renderer, 20, 22, 40, 255);
         SDL_RenderClear(g->renderer);
 
+        /* Two-tone background */
         SDL_SetRenderDrawColor(g->renderer, 30, 32, 55, 255);
         for (int y = WINDOW_H / 2; y < WINDOW_H; y++)
             SDL_RenderDrawLine(g->renderer, 0, y, WINDOW_W, y);
 
-        level_render(&g->level, g->renderer, g->sprites.tile);
+        level_render(&g->level, g->renderer,
+                     g->sprites.tile, g->sprites.spring);
+
+        lootbox_render(&g->lootboxes, g->renderer, g->sprites.lootbox);
 
         for (int i = 0; i < g->enemy_count; i++)
-            enemy_render(&g->enemies[i], g->renderer, g->sprites.enemy);
+            enemy_render(&g->enemies[i], g->renderer,
+                         g->sprites.enemy, g->sprites.boss);
 
         player_render(&g->player, g->renderer, g->sprites.player);
 
         draw_hud(g);
         SDL_RenderPresent(g->renderer);
-        return;
     }
 }
 

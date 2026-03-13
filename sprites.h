@@ -4,26 +4,25 @@
 #include <SDL2/SDL.h>
 
 /*
- * Sprites module — loads PNG textures via SDL2_image.
- * All textures are optional: if a file is missing, the pointer stays NULL
- * and callers fall back to SDL_RenderFillRect.
- *
  * Expected files in assets/:
- *   assets/player.png   — 24x32, frame 0 = idle, frame 1 = jump
- *   assets/enemy.png    — 24x24, single frame
- *   assets/tile.png     — 32x32, single tile
+ *   player.png   — 48×32  (2-frame spritesheet)
+ *   enemy.png    — 24×24  (single frame)
+ *   tile.png     — 32×32  (solid tile)
+ *   spring.png   — 32×32  (spring tile)
+ *   lootbox.png  — 24×24  (loot box)
+ *   boss.png     — 40×40  (boss enemy, single frame)
  */
 
 typedef struct {
-    SDL_Texture *player;   /* spritesheet: 2 frames side-by-side (48x32) */
-    SDL_Texture *enemy;    /* single frame 24x24                          */
-    SDL_Texture *tile;     /* single frame 32x32                          */
+    SDL_Texture *player;
+    SDL_Texture *enemy;
+    SDL_Texture *tile;
+    SDL_Texture *spring;
+    SDL_Texture *lootbox;
+    SDL_Texture *boss;
 } Sprites;
 
-/* Load all textures. Logs warnings for missing files but does not fail. */
 void sprites_load(Sprites *s, SDL_Renderer *renderer);
-
-/* Free all textures. */
 void sprites_free(Sprites *s);
 
 #endif

@@ -3,42 +3,34 @@
 #include <stdio.h>
 #include <string.h>
 
-/* -------------------------------------------------------------------------
-   Built-in fallback map (40 cols x 20 rows).
-   Characters:  '#' solid  '.' air  'P' player spawn  'E' enemy spawn
-   ------------------------------------------------------------------------- */
 static const char *BUILTIN_MAP[] = {
-    "........................................",  /*  0 */
-    "........................................",  /*  1 */
-    "........................................",  /*  2 */
-    "........................................",  /*  3 */
-    "........................................",  /*  4 */
-    "........########........................",  /*  5 */
-    "........................................",  /*  6 */
-    ".................#####..................",  /*  7 */
-    "........................................",  /*  8 */
-    ".....######.............................",  /*  9 */
-    "..........................######........",  /* 10 */
-    "........................................",  /* 11 */
-    "..............########..................",  /* 12 */
-    "........................................",  /* 13 */
-    "........................................",  /* 14 */
-    "........................................",  /* 15 */
-    "........................................",  /* 16 */
-    "........................................",  /* 17 */
-    "........................................",  /* 18 */
-    "########################################",  /* 19 */
+    "........................................",
+    "........................................",
+    "........................................",
+    "........................................",
+    "........................................",
+    "........########........................",
+    "........................................",
+    ".................#####..................",
+    "........................................",
+    ".....######.............................",
+    "..........................######........",
+    "........................................",
+    "..............########..................",
+    "........................................",
+    "........................................",
+    "........................................",
+    "........................................",
+    "........................................",
+    "........................................",
+    "########################################",
 };
 
-/* Default spawns used when the map has no P/E markers */
-static const float DEFAULT_PLAYER_X = 64.0f,  DEFAULT_PLAYER_Y = 500.0f;
+static const float DEFAULT_PLAYER_X = 64.0f, DEFAULT_PLAYER_Y = 500.0f;
 static const float DEFAULT_ENEMY_X[] = {300,500,700,900,1100,400,600,850};
 static const float DEFAULT_ENEMY_Y[] = {550,550,550,550, 550,270,380,290};
 #define N_DEFAULT_ENEMIES 8
 
-/* -------------------------------------------------------------------------
-   Internal: parse an array of string rows into the Level struct
-   ------------------------------------------------------------------------- */
 static void parse_map_chars(Level *lvl, int rows, int cols,
                              const char *lines[]) {
     lvl->rows = rows;
@@ -54,9 +46,8 @@ static void parse_map_chars(Level *lvl, int rows, int cols,
         for (int c = 0; c < cols && c < len; c++) {
             char ch = lines[r][c];
             switch (ch) {
-            case '#':
-                lvl->tiles[r][c] = TILE_SOLID;
-                break;
+            case '#': lvl->tiles[r][c] = TILE_SOLID;  break;
+            case 'S': lvl->tiles[r][c] = TILE_SPRING; break;
             case 'P':
                 lvl->player_spawn.x = (float)(c * TILE_SIZE);
                 lvl->player_spawn.y = (float)(r * TILE_SIZE);
@@ -70,8 +61,7 @@ static void parse_map_chars(Level *lvl, int rows, int cols,
                     lvl->enemy_spawn_count++;
                 }
                 break;
-            default:
-                break;  /* '.' and anything else = air */
+            default: break;
             }
         }
     }
@@ -80,15 +70,10 @@ static void parse_map_chars(Level *lvl, int rows, int cols,
     lvl->pixel_height = rows * TILE_SIZE;
 }
 
-/* -------------------------------------------------------------------------
-   Public API
-   ------------------------------------------------------------------------- */
 void level_init_builtin(Level *lvl) {
     int rows = (int)(sizeof(BUILTIN_MAP) / sizeof(BUILTIN_MAP[0]));
     int cols = (int)strlen(BUILTIN_MAP[0]);
     parse_map_chars(lvl, rows, cols, BUILTIN_MAP);
-
-    /* Built-in map has no P/E markers — install hardcoded defaults */
     lvl->player_spawn.x = DEFAULT_PLAYER_X;
     lvl->player_spawn.y = DEFAULT_PLAYER_Y;
     lvl->enemy_spawn_count = N_DEFAULT_ENEMIES;
@@ -111,15 +96,14 @@ bool level_load(Level *lvl, const char *path) {
 
     while (rows < LEVEL_ROWS_MAX &&
            fgets(line_buf[rows], (int)sizeof(line_buf[rows]), f)) {
-        /* Strip trailing newline / carriage return */
         int len = (int)strlen(line_buf[rows]);
         while (len > 0 &&
                (line_buf[rows][len-1] == '\n' ||
                 line_buf[rows][len-1] == '\r'))
             line_buf[rows][--len] = '\0';
 
-        if (len == 0)               continue;  /* blank line  */
-        if (line_buf[rows][0]==';') continue;  /* comment     */
+        if (len == 0)               continue;
+        if (line_buf[rows][0]==';') continue;
 
         if (len > max_cols) max_cols = len;
         line_ptrs[rows] = line_buf[rows];
@@ -138,12 +122,17 @@ bool level_load(Level *lvl, const char *path) {
     return true;
 }
 
-bool level_is_solid(const Level *lvl, int col, int row) {
+uint8_t level_tile_at(const Level *lvl, int col, int row) {
     if (col < 0 || col >= lvl->cols || row < 0 || row >= lvl->rows)
-        return true;
-    return lvl->tiles[row][col] == TILE_SOLID;
+        return TILE_SOLID;
+    return lvl->tiles[row][col];
 }
 
+bool level_is_solid(const Level *lvl, int col, int row) {
+    return level_tile_at(lvl, col, row) == TILE_SOLID;
+}
+
+/* Only TILE_SOLID blocks movement — spring tiles are passable from below */
 bool level_collides(const Level *lvl, AABB box,
                     int *out_col, int *out_row) {
     int left   = (int)(box.x)              / TILE_SIZE;
@@ -153,7 +142,7 @@ bool level_collides(const Level *lvl, AABB box,
 
     for (int r = top; r <= bottom; r++) {
         for (int c = left; c <= right; c++) {
-            if (level_is_solid(lvl, c, r)) {
+            if (level_tile_at(lvl, c, r) == TILE_SOLID) {
                 if (out_col) *out_col = c;
                 if (out_row) *out_row = r;
                 return true;
@@ -163,26 +152,58 @@ bool level_collides(const Level *lvl, AABB box,
     return false;
 }
 
+bool level_on_spring(const Level *lvl, AABB box,
+                     int *out_col, int *out_row) {
+    /* Check the row of tiles just below the entity's feet */
+    int left   = (int)(box.x)              / TILE_SIZE;
+    int right  = (int)(box.x + box.w - 1) / TILE_SIZE;
+    int bottom = (int)(box.y + box.h)      / TILE_SIZE;
+
+    for (int c = left; c <= right; c++) {
+        if (level_tile_at(lvl, c, bottom) == TILE_SPRING) {
+            if (out_col) *out_col = c;
+            if (out_row) *out_row = bottom;
+            return true;
+        }
+    }
+    return false;
+}
+
 void level_render(const Level *lvl, SDL_Renderer *renderer,
-                  SDL_Texture *tile_tex) {
+                  SDL_Texture *tile_tex, SDL_Texture *spring_tex) {
     for (int r = 0; r < lvl->rows; r++) {
         for (int c = 0; c < lvl->cols; c++) {
-            if (lvl->tiles[r][c] != TILE_SOLID) continue;
+            uint8_t t = lvl->tiles[r][c];
+            if (t == TILE_AIR) continue;
 
-            SDL_Rect dst = {
-                c * TILE_SIZE,
-                r * TILE_SIZE,
-                TILE_SIZE,
-                TILE_SIZE
-            };
+            SDL_Rect dst = { c * TILE_SIZE, r * TILE_SIZE,
+                             TILE_SIZE, TILE_SIZE };
 
-            if (tile_tex) {
-                SDL_RenderCopy(renderer, tile_tex, NULL, &dst);
+            if (t == TILE_SPRING) {
+                if (spring_tex) {
+                    SDL_RenderCopy(renderer, spring_tex, NULL, &dst);
+                } else {
+                    /* Fallback: bright green with coil lines */
+                    SDL_SetRenderDrawColor(renderer, 60, 220, 80, 255);
+                    SDL_RenderFillRect(renderer, &dst);
+                    SDL_SetRenderDrawColor(renderer, 20, 140, 40, 255);
+                    SDL_RenderDrawRect(renderer, &dst);
+                    /* Draw a simple coil hint */
+                    for (int i = 0; i < 3; i++) {
+                        SDL_Rect coil = { dst.x + 6, dst.y + 6 + i*8, 20, 4 };
+                        SDL_RenderFillRect(renderer, &coil);
+                    }
+                }
             } else {
-                SDL_SetRenderDrawColor(renderer, 120, 120, 130, 255);
-                SDL_RenderFillRect(renderer, &dst);
-                SDL_SetRenderDrawColor(renderer, 80, 80, 90, 255);
-                SDL_RenderDrawRect(renderer, &dst);
+                /* TILE_SOLID */
+                if (tile_tex) {
+                    SDL_RenderCopy(renderer, tile_tex, NULL, &dst);
+                } else {
+                    SDL_SetRenderDrawColor(renderer, 120, 120, 130, 255);
+                    SDL_RenderFillRect(renderer, &dst);
+                    SDL_SetRenderDrawColor(renderer, 80, 80, 90, 255);
+                    SDL_RenderDrawRect(renderer, &dst);
+                }
             }
         }
     }

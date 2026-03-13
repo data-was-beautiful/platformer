@@ -16,6 +16,7 @@ typedef struct {
     float x, y;
     float vx, vy;
     bool  on_ground;
+    bool  on_spring;   /* set true for one frame when spring launches */
     bool  alive;
 } Player;
 

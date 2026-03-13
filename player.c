@@ -33,7 +33,6 @@ void player_handle_input(Player *p, const uint8_t *keys) {
 void player_update(Player *p, const Level *lvl, float dt) {
     if (!p->alive) return;
 
-    /* apply gravity */
     p->vy += GRAVITY * dt;
 
     /* --- X axis --- */
@@ -45,14 +44,13 @@ void player_update(Player *p, const Level *lvl, float dt) {
             float tile_left  = (float)(tc * TILE_SIZE);
             float tile_right = tile_left + TILE_SIZE;
             if (p->vx > 0)
-                p->x = tile_left - PLAYER_W;   /* push left */
+                p->x = tile_left - PLAYER_W;
             else if (p->vx < 0)
-                p->x = tile_right;              /* push right */
+                p->x = tile_right;
             p->vx = 0;
         }
     }
 
-    /* clamp to level horizontal bounds */
     if (p->x < 0) { p->x = 0; p->vx = 0; }
     if (p->x + PLAYER_W > lvl->pixel_width) {
         p->x = (float)(lvl->pixel_width - PLAYER_W);
@@ -60,7 +58,8 @@ void player_update(Player *p, const Level *lvl, float dt) {
     }
 
     /* --- Y axis --- */
-    p->on_ground = false;
+    p->on_ground  = false;
+    p->on_spring  = false;
     p->y += p->vy * dt;
     {
         int tc, tr;
@@ -69,21 +68,25 @@ void player_update(Player *p, const Level *lvl, float dt) {
             float tile_top    = (float)(tr * TILE_SIZE);
             float tile_bottom = tile_top + TILE_SIZE;
             if (p->vy > 0) {
-                /* landed on top of tile */
                 p->y = tile_top - PLAYER_H;
                 p->on_ground = true;
             } else {
-                /* hit ceiling */
                 p->y = tile_bottom;
             }
             p->vy = 0;
         }
+
+        /* Spring launch — fires when feet touch a spring tile */
+        AABB box2 = player_aabb(p);
+        if (level_on_spring(lvl, box2, NULL, NULL)) {
+            p->vy = -900.0f;   /* stronger than normal jump */
+            p->on_ground = false;
+            p->on_spring = true;
+        }
     }
 
-    /* fell off the bottom → respawn */
-    if (p->y > lvl->pixel_height + 100) {
+    if (p->y > lvl->pixel_height + 100)
         player_init(p, 64, 400);
-    }
 }
 
 void player_render(const Player *p, SDL_Renderer *renderer,
