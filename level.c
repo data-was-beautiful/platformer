@@ -1,46 +1,146 @@
 #include "level.h"
 #include <SDL2/SDL.h>
+#include <stdio.h>
+#include <string.h>
 
-/* ---------------------------------------------------------------------------
-   Hardcoded level layout (40 cols x 20 rows).
-   1 = solid tile, 0 = air.
-   Row 0 is the top of the screen.
-   --------------------------------------------------------------------------- */
-static const uint8_t MAP[LEVEL_ROWS][LEVEL_COLS] = {
-    /* 0123456789012345678901234567890123456789 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /*  0 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /*  1 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /*  2 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /*  3 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /*  4 */
-    { 0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /*  5 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /*  6 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /*  7 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /*  8 */
-    { 0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /*  9 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0 }, /* 10 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /* 11 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /* 12 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /* 13 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /* 14 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /* 15 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /* 16 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /* 17 */
-    { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 }, /* 18 */
-    { 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1 }, /* 19 */
+/* -------------------------------------------------------------------------
+   Built-in fallback map (40 cols x 20 rows).
+   Characters:  '#' solid  '.' air  'P' player spawn  'E' enemy spawn
+   ------------------------------------------------------------------------- */
+static const char *BUILTIN_MAP[] = {
+    "........................................",  /*  0 */
+    "........................................",  /*  1 */
+    "........................................",  /*  2 */
+    "........................................",  /*  3 */
+    "........................................",  /*  4 */
+    "........########........................",  /*  5 */
+    "........................................",  /*  6 */
+    ".................#####..................",  /*  7 */
+    "........................................",  /*  8 */
+    ".....######.............................",  /*  9 */
+    "..........................######........",  /* 10 */
+    "........................................",  /* 11 */
+    "..............########..................",  /* 12 */
+    "........................................",  /* 13 */
+    "........................................",  /* 14 */
+    "........................................",  /* 15 */
+    "........................................",  /* 16 */
+    "........................................",  /* 17 */
+    "........................................",  /* 18 */
+    "########################################",  /* 19 */
 };
 
-void level_init(Level *lvl) {
-    for (int r = 0; r < LEVEL_ROWS; r++)
-        for (int c = 0; c < LEVEL_COLS; c++)
-            lvl->tiles[r][c] = MAP[r][c];
-    lvl->pixel_width  = LEVEL_COLS * TILE_SIZE;
-    lvl->pixel_height = LEVEL_ROWS * TILE_SIZE;
+/* Default spawns used when the map has no P/E markers */
+static const float DEFAULT_PLAYER_X = 64.0f,  DEFAULT_PLAYER_Y = 500.0f;
+static const float DEFAULT_ENEMY_X[] = {300,500,700,900,1100,400,600,850};
+static const float DEFAULT_ENEMY_Y[] = {550,550,550,550, 550,270,380,290};
+#define N_DEFAULT_ENEMIES 8
+
+/* -------------------------------------------------------------------------
+   Internal: parse an array of string rows into the Level struct
+   ------------------------------------------------------------------------- */
+static void parse_map_chars(Level *lvl, int rows, int cols,
+                             const char *lines[]) {
+    lvl->rows = rows;
+    lvl->cols = cols;
+    lvl->enemy_spawn_count = 0;
+    lvl->player_spawn.x = DEFAULT_PLAYER_X;
+    lvl->player_spawn.y = DEFAULT_PLAYER_Y;
+
+    memset(lvl->tiles, TILE_AIR, sizeof(lvl->tiles));
+
+    for (int r = 0; r < rows; r++) {
+        int len = (int)strlen(lines[r]);
+        for (int c = 0; c < cols && c < len; c++) {
+            char ch = lines[r][c];
+            switch (ch) {
+            case '#':
+                lvl->tiles[r][c] = TILE_SOLID;
+                break;
+            case 'P':
+                lvl->player_spawn.x = (float)(c * TILE_SIZE);
+                lvl->player_spawn.y = (float)(r * TILE_SIZE);
+                break;
+            case 'E':
+                if (lvl->enemy_spawn_count < MAX_SPAWN_ENEMIES) {
+                    lvl->enemy_spawns[lvl->enemy_spawn_count].x =
+                        (float)(c * TILE_SIZE);
+                    lvl->enemy_spawns[lvl->enemy_spawn_count].y =
+                        (float)(r * TILE_SIZE);
+                    lvl->enemy_spawn_count++;
+                }
+                break;
+            default:
+                break;  /* '.' and anything else = air */
+            }
+        }
+    }
+
+    lvl->pixel_width  = cols * TILE_SIZE;
+    lvl->pixel_height = rows * TILE_SIZE;
+}
+
+/* -------------------------------------------------------------------------
+   Public API
+   ------------------------------------------------------------------------- */
+void level_init_builtin(Level *lvl) {
+    int rows = (int)(sizeof(BUILTIN_MAP) / sizeof(BUILTIN_MAP[0]));
+    int cols = (int)strlen(BUILTIN_MAP[0]);
+    parse_map_chars(lvl, rows, cols, BUILTIN_MAP);
+
+    /* Built-in map has no P/E markers — install hardcoded defaults */
+    lvl->player_spawn.x = DEFAULT_PLAYER_X;
+    lvl->player_spawn.y = DEFAULT_PLAYER_Y;
+    lvl->enemy_spawn_count = N_DEFAULT_ENEMIES;
+    for (int i = 0; i < N_DEFAULT_ENEMIES; i++) {
+        lvl->enemy_spawns[i].x = DEFAULT_ENEMY_X[i];
+        lvl->enemy_spawns[i].y = DEFAULT_ENEMY_Y[i];
+    }
+}
+
+bool level_load(Level *lvl, const char *path) {
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        fprintf(stderr, "level_load: cannot open '%s'\n", path);
+        return false;
+    }
+
+    static char line_buf[LEVEL_ROWS_MAX][LEVEL_COLS_MAX + 2];
+    const  char *line_ptrs[LEVEL_ROWS_MAX];
+    int rows = 0, max_cols = 0;
+
+    while (rows < LEVEL_ROWS_MAX &&
+           fgets(line_buf[rows], (int)sizeof(line_buf[rows]), f)) {
+        /* Strip trailing newline / carriage return */
+        int len = (int)strlen(line_buf[rows]);
+        while (len > 0 &&
+               (line_buf[rows][len-1] == '\n' ||
+                line_buf[rows][len-1] == '\r'))
+            line_buf[rows][--len] = '\0';
+
+        if (len == 0)               continue;  /* blank line  */
+        if (line_buf[rows][0]==';') continue;  /* comment     */
+
+        if (len > max_cols) max_cols = len;
+        line_ptrs[rows] = line_buf[rows];
+        rows++;
+    }
+    fclose(f);
+
+    if (rows == 0 || max_cols == 0) {
+        fprintf(stderr, "level_load: '%s' is empty\n", path);
+        return false;
+    }
+
+    parse_map_chars(lvl, rows, max_cols, line_ptrs);
+    printf("level_load: '%s' — %d x %d, %d enemy spawn(s)\n",
+           path, max_cols, rows, lvl->enemy_spawn_count);
+    return true;
 }
 
 bool level_is_solid(const Level *lvl, int col, int row) {
-    if (col < 0 || col >= LEVEL_COLS || row < 0 || row >= LEVEL_ROWS)
-        return true; /* treat out-of-bounds as solid */
+    if (col < 0 || col >= lvl->cols || row < 0 || row >= lvl->rows)
+        return true;
     return lvl->tiles[row][col] == TILE_SOLID;
 }
 
@@ -63,23 +163,26 @@ bool level_collides(const Level *lvl, AABB box,
     return false;
 }
 
-void level_render(const Level *lvl, SDL_Renderer *renderer) {
-    SDL_SetRenderDrawColor(renderer, 120, 120, 130, 255);
-    for (int r = 0; r < LEVEL_ROWS; r++) {
-        for (int c = 0; c < LEVEL_COLS; c++) {
-            if (lvl->tiles[r][c] == TILE_SOLID) {
-                SDL_Rect rect = {
-                    c * TILE_SIZE,
-                    r * TILE_SIZE,
-                    TILE_SIZE,
-                    TILE_SIZE
-                };
-                SDL_RenderFillRect(renderer, &rect);
+void level_render(const Level *lvl, SDL_Renderer *renderer,
+                  SDL_Texture *tile_tex) {
+    for (int r = 0; r < lvl->rows; r++) {
+        for (int c = 0; c < lvl->cols; c++) {
+            if (lvl->tiles[r][c] != TILE_SOLID) continue;
 
-                /* subtle darker border */
-                SDL_SetRenderDrawColor(renderer, 80, 80, 90, 255);
-                SDL_RenderDrawRect(renderer, &rect);
+            SDL_Rect dst = {
+                c * TILE_SIZE,
+                r * TILE_SIZE,
+                TILE_SIZE,
+                TILE_SIZE
+            };
+
+            if (tile_tex) {
+                SDL_RenderCopy(renderer, tile_tex, NULL, &dst);
+            } else {
                 SDL_SetRenderDrawColor(renderer, 120, 120, 130, 255);
+                SDL_RenderFillRect(renderer, &dst);
+                SDL_SetRenderDrawColor(renderer, 80, 80, 90, 255);
+                SDL_RenderDrawRect(renderer, &dst);
             }
         }
     }

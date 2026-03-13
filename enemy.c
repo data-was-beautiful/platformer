@@ -77,21 +77,27 @@ void enemy_update(Enemy *e, const Level *lvl, float dt) {
     if (e->y > lvl->pixel_height + 100) e->alive = false;
 }
 
-void enemy_render(const Enemy *e, SDL_Renderer *renderer) {
+void enemy_render(const Enemy *e, SDL_Renderer *renderer,
+                  SDL_Texture *tex) {
     if (!e->alive) return;
 
-    /* body */
-    SDL_SetRenderDrawColor(renderer, 210, 60, 60, 255);
-    SDL_Rect body = { (int)e->x, (int)e->y, ENEMY_W, ENEMY_H };
-    SDL_RenderFillRect(renderer, &body);
+    SDL_Rect dst = { (int)e->x, (int)e->y, ENEMY_W, ENEMY_H };
 
-    /* angry eyes */
-    SDL_SetRenderDrawColor(renderer, 255, 220, 0, 255);
-    int eye_ox = (e->dir > 0) ? 14 : 2;
-    SDL_Rect eye = { (int)e->x + eye_ox, (int)e->y + 6, 5, 5 };
-    SDL_RenderFillRect(renderer, &eye);
+    if (tex) {
+        SDL_RendererFlip flip = (e->dir < 0) ? SDL_FLIP_HORIZONTAL
+                                              : SDL_FLIP_NONE;
+        SDL_RenderCopyEx(renderer, tex, NULL, &dst, 0.0, NULL, flip);
+    } else {
+        /* Fallback: coloured rectangles */
+        SDL_SetRenderDrawColor(renderer, 210, 60, 60, 255);
+        SDL_RenderFillRect(renderer, &dst);
 
-    /* dark outline */
-    SDL_SetRenderDrawColor(renderer, 140, 20, 20, 255);
-    SDL_RenderDrawRect(renderer, &body);
+        SDL_SetRenderDrawColor(renderer, 255, 220, 0, 255);
+        int eye_ox = (e->dir > 0) ? 14 : 2;
+        SDL_Rect eye = { (int)e->x + eye_ox, (int)e->y + 6, 5, 5 };
+        SDL_RenderFillRect(renderer, &eye);
+
+        SDL_SetRenderDrawColor(renderer, 140, 20, 20, 255);
+        SDL_RenderDrawRect(renderer, &dst);
+    }
 }

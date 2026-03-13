@@ -22,7 +22,10 @@ typedef struct {
 void player_init(Player *p, float start_x, float start_y);
 void player_handle_input(Player *p, const uint8_t *keys);
 void player_update(Player *p, const Level *lvl, float dt);
-void player_render(const Player *p, SDL_Renderer *renderer);
+/* tex is a spritesheet with 2 frames side-by-side (idle | jump).
+   Pass NULL to fall back to coloured rectangles. */
+void player_render(const Player *p, SDL_Renderer *renderer,
+                   SDL_Texture *tex);
 AABB player_aabb(const Player *p);
 
 #endif

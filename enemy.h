@@ -22,7 +22,9 @@ typedef struct {
 
 void enemy_init(Enemy *e, float x, float y);
 void enemy_update(Enemy *e, const Level *lvl, float dt);
-void enemy_render(const Enemy *e, SDL_Renderer *renderer);
+/* tex is a single-frame 24x24 sprite. Pass NULL for coloured rect fallback. */
+void enemy_render(const Enemy *e, SDL_Renderer *renderer,
+                  SDL_Texture *tex);
 AABB enemy_aabb(const Enemy *e);
 
 #endif

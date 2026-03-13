@@ -86,26 +86,38 @@ void player_update(Player *p, const Level *lvl, float dt) {
     }
 }
 
-void player_render(const Player *p, SDL_Renderer *renderer) {
+void player_render(const Player *p, SDL_Renderer *renderer,
+                   SDL_Texture *tex) {
     if (!p->alive) return;
 
-    /* body */
-    SDL_SetRenderDrawColor(renderer, 80, 200, 120, 255);
-    SDL_Rect body = { (int)p->x, (int)p->y, PLAYER_W, PLAYER_H };
-    SDL_RenderFillRect(renderer, &body);
+    SDL_Rect dst = { (int)p->x, (int)p->y, PLAYER_W, PLAYER_H };
 
-    /* eyes */
-    SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
-    SDL_Rect eye_l = { (int)p->x + 5,  (int)p->y + 8, 4, 4 };
-    SDL_Rect eye_r = { (int)p->x + 15, (int)p->y + 8, 4, 4 };
-    SDL_RenderFillRect(renderer, &eye_l);
-    SDL_RenderFillRect(renderer, &eye_r);
+    if (tex) {
+        /* Spritesheet: frame 0 = idle (left half), frame 1 = jump (right half).
+           Each frame is PLAYER_W wide and PLAYER_H tall. */
+        int frame = p->on_ground ? 0 : 1;
+        SDL_Rect src = { frame * PLAYER_W, 0, PLAYER_W, PLAYER_H };
 
-    /* feet indicator when in the air */
-    if (!p->on_ground) {
-        SDL_SetRenderDrawColor(renderer, 60, 160, 90, 200);
-        SDL_Rect feet = { (int)p->x + 4, (int)p->y + PLAYER_H - 6,
-                          PLAYER_W - 8, 4 };
-        SDL_RenderFillRect(renderer, &feet);
+        /* Flip horizontally when moving left */
+        SDL_RendererFlip flip = (p->vx < 0) ? SDL_FLIP_HORIZONTAL
+                                             : SDL_FLIP_NONE;
+        SDL_RenderCopyEx(renderer, tex, &src, &dst, 0.0, NULL, flip);
+    } else {
+        /* Fallback: coloured rectangles */
+        SDL_SetRenderDrawColor(renderer, 80, 200, 120, 255);
+        SDL_RenderFillRect(renderer, &dst);
+
+        SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
+        SDL_Rect eye_l = { (int)p->x + 5,  (int)p->y + 8, 4, 4 };
+        SDL_Rect eye_r = { (int)p->x + 15, (int)p->y + 8, 4, 4 };
+        SDL_RenderFillRect(renderer, &eye_l);
+        SDL_RenderFillRect(renderer, &eye_r);
+
+        if (!p->on_ground) {
+            SDL_SetRenderDrawColor(renderer, 60, 160, 90, 200);
+            SDL_Rect feet = { (int)p->x + 4, (int)p->y + PLAYER_H - 6,
+                              PLAYER_W - 8, 4 };
+            SDL_RenderFillRect(renderer, &feet);
+        }
     }
 }
