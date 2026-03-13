@@ -1,0 +1,27 @@
+#ifndef PLAYER_H
+#define PLAYER_H
+
+#include <stdbool.h>
+#include "physics.h"
+#include "level.h"
+
+#define PLAYER_W        24
+#define PLAYER_H        32
+#define PLAYER_SPEED   200.0f   /* pixels per second */
+#define PLAYER_JUMP   -520.0f   /* initial jump velocity (negative = up) */
+#define GRAVITY        900.0f   /* pixels per second squared */
+
+typedef struct {
+    float x, y;
+    float vx, vy;
+    bool  on_ground;
+    bool  alive;
+} Player;
+
+void player_init(Player *p, float start_x, float start_y);
+void player_handle_input(Player *p, const uint8_t *keys);
+void player_update(Player *p, const Level *lvl, float dt);
+void player_render(const Player *p, struct SDL_Renderer *renderer);
+AABB player_aabb(const Player *p);
+
+#endif
