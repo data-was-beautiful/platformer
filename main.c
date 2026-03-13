@@ -3,28 +3,26 @@
 #include "game.h"
 
 int main(void) {
-    Game g = {0};
+    Game g;
 
     if (game_init(&g) != 0) {
         fprintf(stderr, "Failed to initialise game.\n");
         return 1;
     }
 
-    /* Fixed-timestep loop */
-    const float  TARGET_DT    = 1.0f / 60.0f;
-    float        accumulator  = 0.0f;
-    uint64_t     prev_ticks   = SDL_GetTicks64();
+    const float  TARGET_DT   = 1.0f / 60.0f;
+    float        accumulator = 0.0f;
+    uint64_t     prev_ticks  = SDL_GetTicks64();
 
-    while (g.running) {
+    while (g.state != STATE_QUIT) {
         uint64_t now     = SDL_GetTicks64();
         float    elapsed = (float)(now - prev_ticks) / 1000.0f;
         prev_ticks = now;
-
         accumulator += elapsed;
 
         game_handle_events(&g);
+        if (g.state == STATE_QUIT) break;
 
-        /* integrate in fixed steps */
         while (accumulator >= TARGET_DT) {
             game_update(&g, TARGET_DT);
             accumulator -= TARGET_DT;
@@ -34,6 +32,5 @@ int main(void) {
     }
 
     game_shutdown(&g);
-    printf("Thanks for playing! Deaths: %d\n", g.deaths);
     return 0;
 }

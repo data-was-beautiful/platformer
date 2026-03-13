@@ -5,7 +5,7 @@
 # -----------------------------------------------------------------------
 
 TARGET  = platformer
-SRCS    = main.c game.c player.c enemy.c level.c physics.c sprites.c audio.c
+SRCS    = main.c game.c player.c enemy.c level.c physics.c sprites.c audio.c title.c
 OBJS    = $(SRCS:.c=.o)
 
 CC      = gcc
