@@ -1,9 +1,10 @@
 #include "sprites.h"
-#include <SDL2/SDL_image.h>
 #include <stdio.h>
 #include <string.h>
 
-/* Load a single PNG → SDL_Texture. Returns NULL (with a warning) on failure. */
+#ifdef SDL2_IMAGE_FOUND
+#include <SDL2/SDL_image.h>
+
 static SDL_Texture *load_texture(SDL_Renderer *renderer, const char *path) {
     SDL_Surface *surf = IMG_Load(path);
     if (!surf) {
@@ -13,23 +14,19 @@ static SDL_Texture *load_texture(SDL_Renderer *renderer, const char *path) {
     }
     SDL_Texture *tex = SDL_CreateTextureFromSurface(renderer, surf);
     SDL_FreeSurface(surf);
-    if (!tex) {
-        fprintf(stderr, "WARNING: SDL_CreateTextureFromSurface('%s'): %s\n",
+    if (!tex)
+        fprintf(stderr, "WARNING: CreateTextureFromSurface('%s'): %s\n",
                 path, SDL_GetError());
-    }
     return tex;
 }
 
 void sprites_load(Sprites *s, SDL_Renderer *renderer) {
     memset(s, 0, sizeof(*s));
-
-    /* Initialise SDL2_image for PNG support */
     if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG)) {
         fprintf(stderr, "WARNING: IMG_Init failed: %s — sprites disabled\n",
                 IMG_GetError());
         return;
     }
-
     s->player = load_texture(renderer, "assets/player.png");
     s->enemy  = load_texture(renderer, "assets/enemy.png");
     s->tile   = load_texture(renderer, "assets/tile.png");
@@ -42,3 +39,17 @@ void sprites_free(Sprites *s) {
     IMG_Quit();
     memset(s, 0, sizeof(*s));
 }
+
+#else  /* SDL2_image not available — stub everything out */
+
+void sprites_load(Sprites *s, SDL_Renderer *renderer) {
+    (void)renderer;
+    memset(s, 0, sizeof(*s));
+    fprintf(stderr, "INFO: SDL2_image not compiled in — using rect fallback\n");
+}
+
+void sprites_free(Sprites *s) {
+    memset(s, 0, sizeof(*s));
+}
+
+#endif /* SDL2_IMAGE_FOUND */
