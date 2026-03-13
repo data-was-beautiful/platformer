@@ -2,6 +2,7 @@
 #define PLAYER_H
 
 #include <stdbool.h>
+#include <SDL2/SDL.h>
 #include "physics.h"
 #include "level.h"
 
@@ -21,7 +22,7 @@ typedef struct {
 void player_init(Player *p, float start_x, float start_y);
 void player_handle_input(Player *p, const uint8_t *keys);
 void player_update(Player *p, const Level *lvl, float dt);
-void player_render(const Player *p, struct SDL_Renderer *renderer);
+void player_render(const Player *p, SDL_Renderer *renderer);
 AABB player_aabb(const Player *p);
 
 #endif

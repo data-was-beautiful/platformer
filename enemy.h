@@ -2,6 +2,7 @@
 #define ENEMY_H
 
 #include <stdbool.h>
+#include <SDL2/SDL.h>
 #include "physics.h"
 #include "level.h"
 
@@ -21,7 +22,7 @@ typedef struct {
 
 void enemy_init(Enemy *e, float x, float y);
 void enemy_update(Enemy *e, const Level *lvl, float dt);
-void enemy_render(const Enemy *e, struct SDL_Renderer *renderer);
+void enemy_render(const Enemy *e, SDL_Renderer *renderer);
 AABB enemy_aabb(const Enemy *e);
 
 #endif

@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <SDL2/SDL.h>
 #include "physics.h"
 
 #define TILE_SIZE   32
@@ -31,6 +32,6 @@ bool level_collides(const Level *lvl, AABB box,
                     int *out_col, int *out_row);
 
 /* Draw all solid tiles as grey rectangles */
-void level_render(const Level *lvl, struct SDL_Renderer *renderer);
+void level_render(const Level *lvl, SDL_Renderer *renderer);
 
 #endif
