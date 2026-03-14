@@ -118,12 +118,44 @@ void title_init(TitleScreen *t, bool music_currently_on) {
 }
 
 bool title_handle_event(TitleScreen *t, SDL_Event *e,
+                         SDL_GameController *ctrl,
                          bool *start_game, bool *quit,
                          bool *music_toggled) {
     *start_game    = false;
     *quit          = false;
     *music_toggled = false;
 
+    /* --- Controller button events --- */
+    if (e->type == SDL_CONTROLLERBUTTONDOWN) {
+        switch (e->cbutton.button) {
+        case SDL_CONTROLLER_BUTTON_DPAD_UP:
+            t->selected = (t->selected + MENU_COUNT - 1) % MENU_COUNT;
+            return false;
+        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+            t->selected = (t->selected + 1) % MENU_COUNT;
+            return false;
+        case SDL_CONTROLLER_BUTTON_A:
+        case SDL_CONTROLLER_BUTTON_START:
+            goto confirm;
+        case SDL_CONTROLLER_BUTTON_B:
+        case SDL_CONTROLLER_BUTTON_BACK:
+            *quit = true;
+            return true;
+        }
+        return false;
+    }
+
+    /* --- Controller axis events (left stick up/down for menu nav) --- */
+    if (e->type == SDL_CONTROLLERAXISMOTION &&
+        e->caxis.axis == SDL_CONTROLLER_AXIS_LEFTY) {
+        if (e->caxis.value < -16000)
+            t->selected = (t->selected + MENU_COUNT - 1) % MENU_COUNT;
+        else if (e->caxis.value > 16000)
+            t->selected = (t->selected + 1) % MENU_COUNT;
+        return false;
+    }
+
+    /* --- Keyboard events --- */
     if (e->type != SDL_KEYDOWN) return false;
 
     switch (e->key.keysym.sym) {
@@ -136,21 +168,24 @@ bool title_handle_event(TitleScreen *t, SDL_Event *e,
 
     case SDLK_RETURN:
     case SDLK_SPACE:
-        switch (t->selected) {
-        case MENU_START:
-            *start_game = true;
-            return true;
-        case MENU_MUSIC:
-            t->music_on    = !t->music_on;
-            *music_toggled = true;
-            return false;
-        case MENU_EXIT:
-            *quit = true;
-            return true;
-        }
-        break;
+        goto confirm;
 
     case SDLK_ESCAPE:
+        *quit = true;
+        return true;
+    }
+    return false;
+
+confirm:
+    switch (t->selected) {
+    case MENU_START:
+        *start_game = true;
+        return true;
+    case MENU_MUSIC:
+        t->music_on    = !t->music_on;
+        *music_toggled = true;
+        return false;
+    case MENU_EXIT:
         *quit = true;
         return true;
     }
@@ -221,7 +256,7 @@ void title_render(const TitleScreen *t, SDL_Renderer *renderer,
 
     /* Subtitle */
     SDL_Color sub_col = { 160, 160, 200, 255 };
-    draw_string_centred(renderer, "USE ARROW KEYS AND ENTER",
+    draw_string_centred(renderer, "ARROW KEYS  ENTER  OR  CONTROLLER",
                         cx, title_y + GLYPH_H * GLYPH_SCALE * 2 + 20, sub_col);
 
     /* Menu items */

@@ -94,7 +94,7 @@ void game_start_playing(Game *g) {
 int game_init(Game *g) {
     memset(g, 0, sizeof(*g));
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return -1;
     }
@@ -120,6 +120,15 @@ int game_init(Game *g) {
     audio_load(&g->audio);
     audio_set_music_volume(80);
     audio_set_sfx_volume(&g->audio, 110);
+
+    /* Open the first available game controller */
+    g->controller = NULL;
+    for (int i = 0; i < SDL_NumJoysticks(); i++) {
+        if (SDL_IsGameController(i)) {
+            g->controller = SDL_GameControllerOpen(i);
+            if (g->controller) break;
+        }
+    }
 
     /* Startup diagnostics */
     {
@@ -164,9 +173,36 @@ void game_handle_events(Game *g) {
     while (SDL_PollEvent(&e)) {
         if (e.type == SDL_QUIT) { g->state = STATE_QUIT; return; }
 
+        /* --- Controller hot-plug --- */
+        if (e.type == SDL_CONTROLLERDEVICEADDED) {
+            if (!g->controller) {
+                g->controller = SDL_GameControllerOpen(e.cdevice.which);
+                fprintf(stderr, "INFO: controller connected: %s\n",
+                        g->controller
+                            ? SDL_GameControllerName(g->controller)
+                            : "(failed to open)");
+            }
+        }
+        if (e.type == SDL_CONTROLLERDEVICEREMOVED) {
+            if (g->controller &&
+                SDL_GameControllerGetJoystick(g->controller) ==
+                    SDL_JoystickFromInstanceID(e.cdevice.which)) {
+                SDL_GameControllerClose(g->controller);
+                g->controller = NULL;
+                fprintf(stderr, "INFO: controller disconnected\n");
+                /* Try to reopen any remaining controller */
+                for (int i = 0; i < SDL_NumJoysticks(); i++) {
+                    if (SDL_IsGameController(i)) {
+                        g->controller = SDL_GameControllerOpen(i);
+                        if (g->controller) break;
+                    }
+                }
+            }
+        }
+
         if (g->state == STATE_TITLE) {
             bool start_game, quit, music_toggled;
-            title_handle_event(&g->title, &e,
+            title_handle_event(&g->title, &e, g->controller,
                                &start_game, &quit, &music_toggled);
             if (quit)          { g->state = STATE_QUIT; return; }
             if (music_toggled) {
@@ -184,16 +220,36 @@ void game_handle_events(Game *g) {
                 game_goto_title(g);
                 return;
             }
+            /* Controller Start / Back → return to title */
+            if (e.type == SDL_CONTROLLERBUTTONDOWN &&
+                (e.cbutton.button == SDL_CONTROLLER_BUTTON_START ||
+                 e.cbutton.button == SDL_CONTROLLER_BUTTON_BACK)) {
+                game_goto_title(g);
+                return;
+            }
         }
     }
 
     if (g->state == STATE_PLAYING) {
         const uint8_t *keys = SDL_GetKeyboardState(NULL);
+
+        /* Determine jump intent from keyboard OR controller */
+        bool ctrl_jump = false;
+        if (g->controller) {
+            ctrl_jump =
+                SDL_GameControllerGetButton(g->controller,
+                    SDL_CONTROLLER_BUTTON_A)       != 0 ||
+                SDL_GameControllerGetButton(g->controller,
+                    SDL_CONTROLLER_BUTTON_B)       != 0 ||
+                SDL_GameControllerGetButton(g->controller,
+                    SDL_CONTROLLER_BUTTON_DPAD_UP) != 0;
+        }
         bool jump_pressed  = (keys[SDL_SCANCODE_SPACE] ||
                               keys[SDL_SCANCODE_W]     ||
-                              keys[SDL_SCANCODE_UP]) != 0;
+                              keys[SDL_SCANCODE_UP]    ||
+                              ctrl_jump) != 0;
         bool was_on_ground = g->player.on_ground;
-        player_handle_input(&g->player, keys);
+        player_handle_input(&g->player, keys, g->controller);
         if (jump_pressed && was_on_ground)
             audio_play_sfx(&g->audio, SFX_JUMP);
     }
@@ -381,6 +437,7 @@ void game_render(Game *g) {
    Shutdown
    ------------------------------------------------------------------------- */
 void game_shutdown(Game *g) {
+    if (g->controller) { SDL_GameControllerClose(g->controller); g->controller = NULL; }
     audio_free(&g->audio);
     sprites_free(&g->sprites);
     if (g->renderer) SDL_DestroyRenderer(g->renderer);

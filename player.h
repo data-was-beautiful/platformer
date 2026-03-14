@@ -21,7 +21,8 @@ typedef struct {
 } Player;
 
 void player_init(Player *p, float start_x, float start_y);
-void player_handle_input(Player *p, const uint8_t *keys);
+void player_handle_input(Player *p, const uint8_t *keys,
+                         SDL_GameController *ctrl);
 void player_update(Player *p, const Level *lvl, float dt);
 /* tex is a spritesheet with 2 frames side-by-side (idle | jump).
    Pass NULL to fall back to coloured rectangles. */

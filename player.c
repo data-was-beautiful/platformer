@@ -14,18 +14,44 @@ void player_init(Player *p, float start_x, float start_y) {
     p->alive = true;
 }
 
-void player_handle_input(Player *p, const uint8_t *keys) {
+void player_handle_input(Player *p, const uint8_t *keys,
+                         SDL_GameController *ctrl) {
     if (!p->alive) return;
 
-    p->vx = 0;
-    if (keys[SDL_SCANCODE_LEFT]  || keys[SDL_SCANCODE_A])
-        p->vx = -PLAYER_SPEED;
-    if (keys[SDL_SCANCODE_RIGHT] || keys[SDL_SCANCODE_D])
-        p->vx =  PLAYER_SPEED;
+    /* --- Keyboard --- */
+    bool kb_left  = keys[SDL_SCANCODE_LEFT]  || keys[SDL_SCANCODE_A];
+    bool kb_right = keys[SDL_SCANCODE_RIGHT] || keys[SDL_SCANCODE_D];
+    bool kb_jump  = keys[SDL_SCANCODE_SPACE] || keys[SDL_SCANCODE_W] ||
+                    keys[SDL_SCANCODE_UP];
 
-    if ((keys[SDL_SCANCODE_SPACE] || keys[SDL_SCANCODE_W] ||
-         keys[SDL_SCANCODE_UP]) && p->on_ground) {
-        p->vy = PLAYER_JUMP;
+    /* --- Controller --- */
+    bool ctrl_left = false, ctrl_right = false, ctrl_jump = false;
+    if (ctrl) {
+        /* D-pad */
+        ctrl_left  = SDL_GameControllerGetButton(ctrl,
+                         SDL_CONTROLLER_BUTTON_DPAD_LEFT)  != 0;
+        ctrl_right = SDL_GameControllerGetButton(ctrl,
+                         SDL_CONTROLLER_BUTTON_DPAD_RIGHT) != 0;
+        ctrl_jump  = SDL_GameControllerGetButton(ctrl,
+                         SDL_CONTROLLER_BUTTON_A)          != 0 ||
+                     SDL_GameControllerGetButton(ctrl,
+                         SDL_CONTROLLER_BUTTON_B)          != 0 ||
+                     SDL_GameControllerGetButton(ctrl,
+                         SDL_CONTROLLER_BUTTON_DPAD_UP)    != 0;
+
+        /* Left analog stick (dead-zone: 8000 / 32767 ≈ 24 %) */
+        Sint16 axis_x = SDL_GameControllerGetAxis(ctrl,
+                            SDL_CONTROLLER_AXIS_LEFTX);
+        if (axis_x < -8000) ctrl_left  = true;
+        if (axis_x >  8000) ctrl_right = true;
+    }
+
+    p->vx = 0;
+    if (kb_left  || ctrl_left)  p->vx = -PLAYER_SPEED;
+    if (kb_right || ctrl_right) p->vx =  PLAYER_SPEED;
+
+    if ((kb_jump || ctrl_jump) && p->on_ground) {
+        p->vy        = PLAYER_JUMP;
         p->on_ground = false;
     }
 }

@@ -22,8 +22,9 @@ typedef enum {
 } AppState;
 
 typedef struct {
-    SDL_Window   *window;
-    SDL_Renderer *renderer;
+    SDL_Window        *window;
+    SDL_Renderer      *renderer;
+    SDL_GameController *controller;   /* first connected controller, or NULL */
 
     AppState    state;
     TitleScreen title;

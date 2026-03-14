@@ -19,9 +19,11 @@ typedef struct {
 
 void title_init(TitleScreen *t, bool music_currently_on);
 
-/* Returns true when the user confirms a selection (Enter/Space).
-   Sets *start_game=true if they chose Start, *quit=true if Exit. */
+/* Returns true when the user confirms a selection (Enter/Space/A button).
+   Sets *start_game=true if they chose Start, *quit=true if Exit.
+   Pass ctrl=NULL if no controller is connected. */
 bool title_handle_event(TitleScreen *t, SDL_Event *e,
+                        SDL_GameController *ctrl,
                         bool *start_game, bool *quit,
                         bool *music_toggled);
 
