@@ -42,8 +42,24 @@ void sprites_free(Sprites *s) {
     if (s->spring)  SDL_DestroyTexture(s->spring);
     if (s->lootbox) SDL_DestroyTexture(s->lootbox);
     if (s->boss)    SDL_DestroyTexture(s->boss);
+    if (s->bg)      SDL_DestroyTexture(s->bg);
     IMG_Quit();
     memset(s, 0, sizeof(*s));
+}
+
+void background_free(Sprites *s) {
+    if (s->bg) { SDL_DestroyTexture(s->bg); s->bg = NULL; }
+}
+
+void background_load(Sprites *s, SDL_Renderer *renderer, int level_num) {
+    background_free(s);
+    char path[64];
+    snprintf(path, sizeof(path), "assets/bg%d.png", level_num);
+    s->bg = load_texture(renderer, path);
+    if (s->bg)
+        fprintf(stderr, "INFO: background  : loaded '%s'\n", path);
+    else
+        fprintf(stderr, "INFO: background  : '%s' not found — using colour fallback\n", path);
 }
 
 #else
@@ -56,6 +72,14 @@ void sprites_load(Sprites *s, SDL_Renderer *renderer) {
 
 void sprites_free(Sprites *s) {
     memset(s, 0, sizeof(*s));
+}
+
+void background_free(Sprites *s) {
+    (void)s;  /* no-op without SDL2_image */
+}
+
+void background_load(Sprites *s, SDL_Renderer *renderer, int level_num) {
+    (void)s; (void)renderer; (void)level_num;  /* no-op without SDL2_image */
 }
 
 #endif

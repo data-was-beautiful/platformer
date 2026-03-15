@@ -67,6 +67,7 @@ void game_load_level(Game *g, int level_num) {
     spawn_enemies(g);
     lootbox_manager_init(&g->lootboxes);
     bullet_manager_init(&g->bullets);
+    background_load(&g->sprites, g->renderer, level_num);
 }
 
 /* -------------------------------------------------------------------------
@@ -159,6 +160,8 @@ int game_init(Game *g) {
             g->sprites.spring  ? "OK" : "missing",
             g->sprites.lootbox ? "OK" : "missing",
             g->sprites.boss    ? "OK" : "missing");
+        fprintf(stderr,
+            "INFO: background  : loaded on first level start\n");
     }
 
     g->music_on = true;
@@ -444,10 +447,19 @@ void game_render(Game *g) {
         SDL_SetRenderDrawColor(g->renderer, 20, 22, 40, 255);
         SDL_RenderClear(g->renderer);
 
-        /* Two-tone background */
-        SDL_SetRenderDrawColor(g->renderer, 30, 32, 55, 255);
-        for (int y = WINDOW_H / 2; y < WINDOW_H; y++)
-            SDL_RenderDrawLine(g->renderer, 0, y, WINDOW_W, y);
+        /* Background — texture if available, else a two-tone gradient fallback */
+        if (g->sprites.bg) {
+            SDL_Rect screen = { 0, 0, WINDOW_W, WINDOW_H };
+            SDL_RenderCopy(g->renderer, g->sprites.bg, NULL, &screen);
+        } else {
+            /* Fallback: two-tone solid colour */
+            SDL_SetRenderDrawColor(g->renderer, 20, 22, 40, 255);
+            SDL_Rect top_half = { 0, 0, WINDOW_W, WINDOW_H / 2 };
+            SDL_RenderFillRect(g->renderer, &top_half);
+            SDL_SetRenderDrawColor(g->renderer, 30, 32, 55, 255);
+            SDL_Rect bot_half = { 0, WINDOW_H / 2, WINDOW_W, WINDOW_H / 2 };
+            SDL_RenderFillRect(g->renderer, &bot_half);
+        }
 
         level_render(&g->level, g->renderer,
                      g->sprites.tile, g->sprites.spring);
