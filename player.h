@@ -16,13 +16,18 @@ typedef struct {
     float x, y;
     float vx, vy;
     bool  on_ground;
-    bool  on_spring;   /* set true for one frame when spring launches */
+    bool  on_spring;        /* set true for one frame when spring launches */
     bool  alive;
+    int   facing;           /* +1 right (default), -1 left */
+    float shoot_cooldown;   /* seconds remaining until player can fire again */
 } Player;
+
+#define SHOOT_COOLDOWN  0.25f   /* seconds between shots */
 
 void player_init(Player *p, float start_x, float start_y);
 void player_handle_input(Player *p, const uint8_t *keys,
-                         SDL_GameController *ctrl);
+                         SDL_GameController *ctrl,
+                         bool *shoot_requested);
 void player_update(Player *p, const Level *lvl, float dt);
 /* tex is a spritesheet with 2 frames side-by-side (idle | jump).
    Pass NULL to fall back to coloured rectangles. */

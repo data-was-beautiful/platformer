@@ -6,6 +6,7 @@
 #include "player.h"
 #include "enemy.h"
 #include "lootbox.h"
+#include "bullet.h"
 #include "sprites.h"
 #include "audio.h"
 #include "title.h"
@@ -34,6 +35,7 @@ typedef struct {
     Enemy          enemies[MAX_ENEMIES];
     int            enemy_count;
     LootBoxManager lootboxes;
+    BulletManager  bullets;
 
     Sprites sprites;
     Audio   audio;

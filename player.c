@@ -12,10 +12,13 @@ void player_init(Player *p, float start_x, float start_y) {
     p->vy = 0;
     p->on_ground = false;
     p->alive = true;
+    p->facing = 1;
+    p->shoot_cooldown = 0.0f;
 }
 
 void player_handle_input(Player *p, const uint8_t *keys,
-                         SDL_GameController *ctrl) {
+                         SDL_GameController *ctrl,
+                         bool *shoot_requested) {
     if (!p->alive) return;
 
     /* --- Keyboard --- */
@@ -23,9 +26,11 @@ void player_handle_input(Player *p, const uint8_t *keys,
     bool kb_right = keys[SDL_SCANCODE_RIGHT] || keys[SDL_SCANCODE_D];
     bool kb_jump  = keys[SDL_SCANCODE_SPACE] || keys[SDL_SCANCODE_W] ||
                     keys[SDL_SCANCODE_UP];
+    bool kb_shoot = keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL];
 
     /* --- Controller --- */
     bool ctrl_left = false, ctrl_right = false, ctrl_jump = false;
+    bool ctrl_shoot = false;
     if (ctrl) {
         /* D-pad */
         ctrl_left  = SDL_GameControllerGetButton(ctrl,
@@ -38,6 +43,10 @@ void player_handle_input(Player *p, const uint8_t *keys,
                          SDL_CONTROLLER_BUTTON_B)          != 0 ||
                      SDL_GameControllerGetButton(ctrl,
                          SDL_CONTROLLER_BUTTON_DPAD_UP)    != 0;
+        ctrl_shoot = SDL_GameControllerGetButton(ctrl,
+                         SDL_CONTROLLER_BUTTON_X)          != 0 ||
+                     SDL_GameControllerGetButton(ctrl,
+                         SDL_CONTROLLER_BUTTON_Y)          != 0;
 
         /* Left analog stick (dead-zone: 8000 / 32767 ≈ 24 %) */
         Sint16 axis_x = SDL_GameControllerGetAxis(ctrl,
@@ -47,17 +56,31 @@ void player_handle_input(Player *p, const uint8_t *keys,
     }
 
     p->vx = 0;
-    if (kb_left  || ctrl_left)  p->vx = -PLAYER_SPEED;
-    if (kb_right || ctrl_right) p->vx =  PLAYER_SPEED;
+    if (kb_left  || ctrl_left)  { p->vx = -PLAYER_SPEED; p->facing = -1; }
+    if (kb_right || ctrl_right) { p->vx =  PLAYER_SPEED; p->facing =  1; }
 
     if ((kb_jump || ctrl_jump) && p->on_ground) {
         p->vy        = PLAYER_JUMP;
         p->on_ground = false;
     }
+
+    /* Shoot: request a bullet if cooldown has expired */
+    if (shoot_requested) {
+        *shoot_requested = (kb_shoot || ctrl_shoot) &&
+                           (p->shoot_cooldown <= 0.0f);
+        if (*shoot_requested)
+            p->shoot_cooldown = SHOOT_COOLDOWN;
+    }
 }
 
 void player_update(Player *p, const Level *lvl, float dt) {
     if (!p->alive) return;
+
+    /* Tick shoot cooldown */
+    if (p->shoot_cooldown > 0.0f) {
+        p->shoot_cooldown -= dt;
+        if (p->shoot_cooldown < 0.0f) p->shoot_cooldown = 0.0f;
+    }
 
     p->vy += GRAVITY * dt;
 

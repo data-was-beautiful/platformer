@@ -66,6 +66,7 @@ void game_load_level(Game *g, int level_num) {
                 g->level.player_spawn.y);
     spawn_enemies(g);
     lootbox_manager_init(&g->lootboxes);
+    bullet_manager_init(&g->bullets);
 }
 
 /* -------------------------------------------------------------------------
@@ -249,9 +250,20 @@ void game_handle_events(Game *g) {
                               keys[SDL_SCANCODE_UP]    ||
                               ctrl_jump) != 0;
         bool was_on_ground = g->player.on_ground;
-        player_handle_input(&g->player, keys, g->controller);
+        bool shoot_requested = false;
+        player_handle_input(&g->player, keys, g->controller, &shoot_requested);
         if (jump_pressed && was_on_ground)
             audio_play_sfx(&g->audio, SFX_JUMP);
+
+        /* Fire a bullet if requested */
+        if (shoot_requested && g->player.alive) {
+            /* Spawn bullet from the front-centre of the player */
+            float bx = (g->player.facing > 0)
+                       ? g->player.x + PLAYER_W        /* right side */
+                       : g->player.x - BULLET_W;       /* left side */
+            float by = g->player.y + PLAYER_H / 2.0f - BULLET_H / 2.0f;
+            bullet_fire(&g->bullets, bx, by, g->player.facing);
+        }
     }
 }
 
@@ -270,7 +282,27 @@ void game_update(Game *g, float dt) {
     if (!was_on_spring && g->player.on_spring)
         audio_play_sfx(&g->audio, SFX_SPRING);
 
-    /* --- Enemy physics --- */
+    /* --- Bullet physics --- */
+    bullet_manager_update(&g->bullets, &g->level, dt);
+
+    /* --- Bullet–enemy collision --- */
+    for (int b = 0; b < MAX_BULLETS; b++) {
+        if (!g->bullets.bullets[b].alive) continue;
+        for (int i = 0; i < g->enemy_count; i++) {
+            if (!g->enemies[i].alive) continue;
+            AABB ebox = enemy_aabb(&g->enemies[i]);
+            if (bullet_hits(&g->bullets, b, ebox)) {
+                g->enemies[i].hp--;
+                audio_play_sfx(&g->audio, SFX_STOMP);
+                if (g->enemies[i].hp <= 0) {
+                    g->enemies[i].alive = false;
+                    g->score += (g->enemies[i].type == ENEMY_BOSS) ? 3 : 1;
+                }
+                break;   /* bullet consumed, stop checking enemies */
+            }
+        }
+    }
+
     for (int i = 0; i < g->enemy_count; i++)
         enemy_update(&g->enemies[i], &g->level, dt);
 
@@ -427,6 +459,8 @@ void game_render(Game *g) {
                          g->sprites.enemy, g->sprites.boss);
 
         player_render(&g->player, g->renderer, g->sprites.player);
+
+        bullet_manager_render(&g->bullets, g->renderer);
 
         draw_hud(g);
         SDL_RenderPresent(g->renderer);
